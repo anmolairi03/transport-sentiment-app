@@ -2,6 +2,7 @@ import React from 'react';
 import { StateData } from '../types';
 import { getSentimentColor, getSentimentEmoji } from '../utils/sentimentAnalysis';
 import { INDIAN_STATES } from '../utils/indianStatesData';
+import indiaStatesData from '../assets/india_states.json';
 
 interface IndianMapVisualizationProps {
   states: StateData[];
@@ -17,11 +18,68 @@ export const IndianMapVisualization: React.FC<IndianMapVisualizationProps> = ({
     state.transportBreakdown[selectedTransportType as keyof typeof state.transportBreakdown] > 0
   );
 
-  // Boundary of India (approximate)
-  const MIN_LAT = 6;
-  const MAX_LAT = 37;
-  const MIN_LNG = 68;
-  const MAX_LNG = 97;
+  // Get the bounds of India from the GeoJSON data
+  const getBounds = () => {
+    let minLat = Infinity, maxLat = -Infinity;
+    let minLng = Infinity, maxLng = -Infinity;
+
+    indiaStatesData.features.forEach((feature: any) => {
+      if (feature.geometry.type === 'Polygon') {
+        feature.geometry.coordinates[0].forEach((coord: [number, number]) => {
+          const [lng, lat] = coord;
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+          minLng = Math.min(minLng, lng);
+          maxLng = Math.max(maxLng, lng);
+        });
+      } else if (feature.geometry.type === 'MultiPolygon') {
+        feature.geometry.coordinates.forEach((polygon: any) => {
+          polygon[0].forEach((coord: [number, number]) => {
+            const [lng, lat] = coord;
+            minLat = Math.min(minLat, lat);
+            maxLat = Math.max(maxLat, lat);
+            minLng = Math.min(minLng, lng);
+            maxLng = Math.max(maxLng, lng);
+          });
+        });
+      }
+    });
+
+    return { minLat, maxLat, minLng, maxLng };
+  };
+
+  const bounds = getBounds();
+  const mapWidth = 800;
+  const mapHeight = 600;
+
+  // Convert lat/lng to SVG coordinates
+  const projectCoordinate = (lng: number, lat: number) => {
+    const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * mapWidth;
+    const y = ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * mapHeight;
+    return [x, y];
+  };
+
+  // Convert polygon coordinates to SVG path
+  const coordinatesToPath = (coordinates: any) => {
+    if (!coordinates || coordinates.length === 0) return '';
+    
+    const pathCommands = coordinates.map((coord: [number, number]) => {
+      const [lng, lat] = coord;
+      const [x, y] = projectCoordinate(lng, lat);
+      return `${x},${y}`;
+    }).join(' L ');
+    
+    return `M ${pathCommands} Z`;
+  };
+
+  // Get state data for coloring
+  const getStateData = (stateName: string) => {
+    return filteredStates.find(state => 
+      state.state === stateName || 
+      state.state.toLowerCase().includes(stateName.toLowerCase()) ||
+      stateName.toLowerCase().includes(state.state.toLowerCase())
+    );
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -32,101 +90,126 @@ export const IndianMapVisualization: React.FC<IndianMapVisualizationProps> = ({
         </div>
       </div>
       
-      {/* Map Container */}
-      <div className="relative bg-gradient-to-br from-blue-50 to-green-50 rounded-lg h-[500px] overflow-hidden">
-        {/* Indian Map Image */}
-        <div className="absolute inset-0 w-full h-full">
-          <img 
-            src="/MapChart_Map.png" 
-            alt="Indian Map" 
-            className="w-full h-full object-cover"  // 🔄 Stretch map to fill
-            style={{ filter: 'brightness(1.1) contrast(1.05)' }}
-            onError={(e) => {
-              console.error('Map image failed to load:', e);
-              e.currentTarget.style.display = 'none';
-            }}
-            onLoad={() => console.log('Map image loaded successfully')}
-          />
-        </div>
+      {/* SVG Map Container */}
+      <div className="relative bg-gradient-to-br from-blue-50 to-green-50 rounded-lg overflow-hidden">
+        <svg 
+          width="100%" 
+          height="500" 
+          viewBox={`0 0 ${mapWidth} ${mapHeight}`}
+          className="w-full h-[500px]"
+        >
+          {/* State boundaries */}
+          {indiaStatesData.features.map((feature: any, index: number) => {
+            const stateName = feature.properties.NAME_1 || feature.properties.name || feature.properties.ST_NM;
+            const stateData = getStateData(stateName);
+            
+            let pathData = '';
+            
+            if (feature.geometry.type === 'Polygon') {
+              pathData = coordinatesToPath(feature.geometry.coordinates[0]);
+            } else if (feature.geometry.type === 'MultiPolygon') {
+              pathData = feature.geometry.coordinates
+                .map((polygon: any) => coordinatesToPath(polygon[0]))
+                .join(' ');
+            }
 
-        {/* State Markers */}
-        {filteredStates.map((state) => {
-          const stateCoords = INDIAN_STATES[state.state];
-          if (!stateCoords) return null;
+            const fillColor = stateData 
+              ? getSentimentColor(stateData.sentimentScore)
+              : '#3B82F6'; // Blue color for states with no data
 
-          const score = Number(state.sentimentScore || 0);
+            return (
+              <g key={index}>
+                <path
+                  d={pathData}
+                  fill={fillColor}
+                  stroke="#ffffff"
+                  strokeWidth="1"
+                  opacity={stateData ? "0.8" : "0.6"}
+                  className="hover:opacity-100 transition-opacity cursor-pointer"
+                />
+              </g>
+            );
+          })}
 
-          // 🔄 100% Scaled position mapping
-          const x = ((stateCoords.lng - MIN_LNG) / (MAX_LNG - MIN_LNG)) * 100;
-          const y = ((MAX_LAT - stateCoords.lat) / (MAX_LAT - MIN_LAT)) * 100;
+          {/* Data points for states with data */}
+          {filteredStates.map((state) => {
+            const stateCoords = INDIAN_STATES[state.state];
+            if (!stateCoords) return null;
 
-          return (
-            <div
-              key={state.state}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
-              style={{ left: `${x}%`, top: `${y}%` }}
-            >
-              {/* Heatmap Circle */}
-              <div
-                className="w-12 h-12 rounded-full opacity-60 animate-pulse"
-                style={{
-                  backgroundColor: getSentimentColor(score),
-                  transform: `scale(${0.8 + Math.abs(score) * 0.8})`,
-                }}
-              />
+            const [x, y] = projectCoordinate(stateCoords.lng, stateCoords.lat);
+            const score = Number(state.sentimentScore || 0);
 
-              {/* Emoji Marker */}
-              <div
-                className="absolute inset-0 w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-xs font-bold text-white m-3"
-                style={{ backgroundColor: getSentimentColor(score) }}
-              >
-                {getSentimentEmoji({
-                  polarity: score,
-                  subjectivity: 0.5,
-                  label: 'neutral',
-                  confidence: 0.8,
-                })}
-              </div>
+            return (
+              <g key={state.state}>
+                {/* Heatmap Circle */}
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={15 + Math.abs(score) * 10}
+                  fill={getSentimentColor(score)}
+                  opacity="0.4"
+                  className="animate-pulse"
+                />
 
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-                <div className="bg-gray-800 text-white px-4 py-3 rounded-lg text-sm whitespace-nowrap shadow-xl">
-                  <div className="font-semibold text-yellow-300">{state.state}</div>
-                  <div className="text-xs text-gray-300 mb-2">
-                    Cities: {state.majorCities.slice(0, 2).join(', ')}
-                  </div>
-                  <div className="space-y-1">
-                    <div>Sentiment: 
-                      <span className="font-medium">
-                        {typeof state.sentimentScore === 'number'
-                          ? state.sentimentScore.toFixed(2)
-                          : !isNaN(Number(state.sentimentScore))
-                            ? Number(state.sentimentScore).toFixed(2)
-                            : 'N/A'}
-                      </span>
-                    </div>
-                    <div>Messages: 
-                      <span className="font-medium">{state.totalMessages.toLocaleString()}</span>
-                    </div>
-                    <div>Trend: 
-                      <span className={`font-medium ${
-                        state.trend === 'improving' ? 'text-green-400' : 
-                        state.trend === 'declining' ? 'text-red-400' : 'text-yellow-400'
-                      }`}>{state.trend}</span>
-                    </div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-gray-600">
-                    <div className="text-xs">
-                      <div>🚌 Bus: {state.transportBreakdown.bus}</div>
-                      <div>🚇 Metro: {state.transportBreakdown.metro}</div>
-                      <div>🚂 Train: {state.transportBreakdown.train}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+                {/* Data Point */}
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="8"
+                  fill={getSentimentColor(score)}
+                  stroke="white"
+                  strokeWidth="2"
+                  className="cursor-pointer hover:r-10 transition-all"
+                />
+
+                {/* Emoji Indicator */}
+                <text
+                  x={x}
+                  y={y + 2}
+                  textAnchor="middle"
+                  fontSize="10"
+                  className="pointer-events-none"
+                >
+                  {getSentimentEmoji({
+                    polarity: score,
+                    subjectivity: 0.5,
+                    label: 'neutral',
+                    confidence: 0.8,
+                  })}
+                </text>
+
+                {/* Tooltip Group */}
+                <g className="opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+                  <rect
+                    x={x + 15}
+                    y={y - 40}
+                    width="200"
+                    height="80"
+                    fill="rgba(0, 0, 0, 0.9)"
+                    rx="4"
+                    ry="4"
+                  />
+                  <text x={x + 25} y={y - 25} fill="white" fontSize="12" fontWeight="bold">
+                    {state.state}
+                  </text>
+                  <text x={x + 25} y={y - 10} fill="white" fontSize="10">
+                    Sentiment: {typeof state.sentimentScore === 'number'
+                      ? state.sentimentScore.toFixed(2)
+                      : !isNaN(Number(state.sentimentScore))
+                        ? Number(state.sentimentScore).toFixed(2)
+                        : 'N/A'}
+                  </text>
+                  <text x={x + 25} y={y + 5} fill="white" fontSize="10">
+                    Messages: {state.totalMessages.toLocaleString()}
+                  </text>
+                  <text x={x + 25} y={y + 20} fill="white" fontSize="10">
+                    Trend: {state.trend}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </svg>
 
         {/* Regional Labels */}
         <div className="absolute top-4 left-4 text-xs text-gray-600 bg-white/80 p-2 rounded">
@@ -150,6 +233,10 @@ export const IndianMapVisualization: React.FC<IndianMapVisualizationProps> = ({
             <div className="w-4 h-4 rounded-full bg-red-500"></div>
             <span className="text-sm">Negative Sentiment</span>
           </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+            <span className="text-sm">No Data</span>
+          </div>
         </div>
         <div className="text-sm text-gray-500">
           Total States: {filteredStates.length} | 
@@ -159,14 +246,24 @@ export const IndianMapVisualization: React.FC<IndianMapVisualizationProps> = ({
 
       {/* Quick Stats */}
       <div className="mt-4 grid grid-cols-5 gap-4 text-center">
-        {['north', 'south', 'east', 'west', 'central'].map(region => (
-          <div key={region} className={`bg-${region}-50 p-3 rounded-lg`}>
-            <div className={`text-lg font-bold text-${region}-600`}>
-              {filteredStates.filter(s => INDIAN_STATES[s.state]?.region === region).length}
+        {['north', 'south', 'east', 'west', 'central'].map(region => {
+          const regionStates = filteredStates.filter(s => INDIAN_STATES[s.state]?.region === region);
+          const avgSentiment = regionStates.length > 0 
+            ? regionStates.reduce((sum, s) => sum + Number(s.sentimentScore || 0), 0) / regionStates.length
+            : 0;
+          
+          return (
+            <div key={region} className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-lg font-bold" style={{ color: getSentimentColor(avgSentiment) }}>
+                {regionStates.length}
+              </div>
+              <div className="text-xs text-gray-600 capitalize">{region}</div>
+              <div className="text-xs font-medium" style={{ color: getSentimentColor(avgSentiment) }}>
+                {avgSentiment.toFixed(2)}
+              </div>
             </div>
-            <div className={`text-xs text-${region}-600 capitalize`}>{region}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

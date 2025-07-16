@@ -7,7 +7,7 @@ import os
 # --- CONFIGURATION ---
 
 # Replace with your actual Bearer Token.
-BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAI9g3AEAAAAAJmkjy7NDkkQhX4pUj0dxn6nROv4%3DfbKReZFwCQP2YRdQC7HlRqikYlzOCMgQT05bpwxFnyhDD3Ghfg" 
+BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAKti3AEAAAAAJ4n3C9CZbZ6hdfoT9V%2BTuLmfgz8%3DXRCIjqFDeSqKss65Q7zzlYjG4uotxMTbQkhLVeezgNOi7plIbd" 
 
 # Enhanced transport-related queries for all Indian states
 QUERIES = [

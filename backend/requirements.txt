@@ -2,9 +2,8 @@ requests==2.31.0
 flask==2.3.3
 flask-cors==4.0.0
 textblob==0.17.1
-sqlite3
-threading
-json
-datetime
-time
-re
+praw==7.7.1
+beautifulsoup4==4.12.2
+aiohttp==3.9.1
+newsapi-python==0.2.7
+lxml==4.9.3

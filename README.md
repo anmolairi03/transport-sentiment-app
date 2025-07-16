@@ -67,36 +67,26 @@ npm run dev
 
 ### **2. Setup Backend**
 ```bash
-# Navigate to backend directory
-cd backend
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Or run the setup script
-python setup.py
+# Run the complete setup (installs dependencies + collects data + starts API)
+python backend/run_data_collection.py
 ```
 
-### **3. Configure Twitter API**
-1. Get your Twitter Bearer Token from [Twitter Developer Portal](https://developer.twitter.com/)
-2. Update the `BEARER_TOKEN` in `backend/twitter_scraper.py`:
-```python
-BEARER_TOKEN = "your_actual_bearer_token_here"
-```
-
-### **4. Start the Backend**
+### **3. Alternative: Manual Step-by-Step**
 ```bash
-# Start the Twitter scraper and API server
-python backend/twitter_scraper.py
+# Install dependencies
+pip install requests flask flask-cors textblob praw beautifulsoup4 newsapi-python mysql-connector-python
+
+# Collect data from Reddit, News APIs, and web scraping
+python backend/multi_source_scraper.py
+
+# Analyze sentiment and store in database
+python backend/analyse_sentiment.py
+
+# Start API server
+python backend/api.py
 ```
 
-The system will:
-- Start scraping Twitter for transport-related tweets
-- Process and analyze sentiment in real-time
-- Store data in SQLite database
-- Serve API endpoints for the frontend
-
-### **5. Access the Application**
+### **4. Access the Application**
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:5000
 
@@ -245,7 +235,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-For support, email support@transport-sentiment.com or join our Slack channel.
 
 ---
 
