@@ -1,25 +1,26 @@
+# Dockerfile
+
 FROM python:3.11-slim
 
-# Install dependencies for lxml and MySQL
+# Install lxml dependencies
 RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libxslt1-dev \
     gcc \
-    default-libmysqlclient-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set workdir
 WORKDIR /app
 
-# Copy all files including .env
+# Copy project files
 COPY . .
 
-# Install Python packages
+# Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Expose Flask port
+# Expose port (if needed)
 EXPOSE 5000
 
-# Start app
+# Start the Flask app
 CMD ["python", "backend/api.py"]
