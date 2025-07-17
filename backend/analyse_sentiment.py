@@ -7,11 +7,11 @@ import re
 
 # ---------- DATABASE CONFIG ----------
 DB_CONFIG = {
-    "host": os.getenv('MYSQL_HOST', 'localhost'),
-    "user": os.getenv('MYSQL_USER', 'root'),
-    "password": os.getenv('MYSQL_PASSWORD', 'gadheullu12'),
-    "database": os.getenv('MYSQL_DATABASE', 'transport_sentiment_app'),
-    "port": int(os.getenv('MYSQL_PORT', 3306)),
+    "host": os.getenv('MYSQL_HOST'),
+    "user": os.getenv('MYSQL_USER'),
+    "password": os.getenv('MYSQL_PASSWORD'),
+    "database": os.getenv('MYSQL_DATABASE'),
+    "port": int(os.getenv('MYSQL_PORT')),
     "charset": "utf8mb4",
     "collation": "utf8mb4_unicode_ci"
 }
