@@ -22,7 +22,7 @@ class Database:
                     'database': os.getenv('MYSQL_DATABASE'),
                     'user': os.getenv('MYSQL_USER'),
                     'password': os.getenv('MYSQL_PASSWORD'),
-                    'port': int(os.getenv('MYSQL_PORT', 3306)),
+                    'port': int(os.getenv('MYSQL_PORT')),
                     'charset': 'utf8mb4',
                     'collation': 'utf8mb4_unicode_ci',
                     'autocommit': True

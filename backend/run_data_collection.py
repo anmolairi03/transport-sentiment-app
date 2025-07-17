@@ -103,10 +103,10 @@ def check_mysql_connection():
     try:
         import mysql.connector
         conn = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="gadheullu12",
-            database="transport_sentiment_app"
+        host=os.getenv("MYSQL_HOST"),
+        user=os.getenv("MYSQL_USER"),
+        password=os.getenv("MYSQL_PASSWORD"),
+        database=os.getenv("MYSQL_DATABASE")
         )
         conn.close()
         print("✅ MySQL connection successful")
