@@ -7,3 +7,4 @@ beautifulsoup4==4.12.2
 newsapi-python==0.2.7
 mysql-connector-python==8.2.0
 lxml==4.9.3
+python-dotenv
