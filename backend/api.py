@@ -1,19 +1,15 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-import mysql.connector
+import os
+from database import db
 from collections import defaultdict
 import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# --- MySQL Configuration ---
-db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'gadheullu12',  # your password if any
-    'database': 'transport_sentiment_app'
-}
+# Get port from environment variable (Render sets this)
+PORT = int(os.environ.get('PORT', 5000))
 
 # --- Helper Functions ---
 def determine_transport_type(text):
@@ -43,31 +39,27 @@ def extract_state_from_region(region):
         return region.split(',')[-1].strip()
     return region
 
-def get_db_connection():
-    """Get database connection with error handling"""
-    try:
-        return mysql.connector.connect(**db_config)
-    except mysql.connector.Error as err:
-        print(f"Database connection error: {err}")
-        return None
-
 # --- Routes ---
+
+@app.route('/api/health')
+def health_check():
+    """Health check endpoint for Render"""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'transport-sentiment-api',
+        'database': 'connected' if db.connection else 'disconnected'
+    })
 
 @app.route('/api/status')
 def status():
     """API health check"""
     try:
-        conn = get_db_connection()
-        if conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM tweet_sentiment")
-            count = cursor.fetchone()[0]
-            cursor.close()
-            conn.close()
+        tweets = db.get_recent_tweets(limit=1)
+        if tweets:
             return jsonify({
                 'status': 'API is running!',
                 'database': 'connected',
-                'total_tweets': count
+                'total_tweets': len(db.get_recent_tweets(limit=1000))
             })
         else:
             return jsonify({
@@ -86,23 +78,13 @@ def status():
 def get_tweets():
     """Get recent tweets with sentiment analysis"""
     try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-            
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT * FROM tweet_sentiment 
-            ORDER BY created_at DESC 
-            LIMIT 100
-        """)
-        rows = cursor.fetchall()
+        rows = db.get_recent_tweets(limit=100)
 
         tweets = []
         for row in rows:
-            sentiment_label = row.get('sentiment', 'neutral')
-            transport_type = determine_transport_type(row.get('text', ''))
-            region = row.get('region', 'India')
+            sentiment_label = row['sentiment'] if 'sentiment' in row else 'neutral'
+            transport_type = determine_transport_type(row['text'] if 'text' in row else '')
+            region = row['region'] if 'region' in row else 'India'
             
             # Extract state and city from region
             if ',' in region:
@@ -116,7 +98,7 @@ def get_tweets():
             tweets.append({
                 "id": row['id'],
                 "text": row['text'],
-                "timestamp": row['created_at'].isoformat() if row['created_at'] else datetime.datetime.now().isoformat(),
+                "timestamp": row['created_at'].isoformat() if 'created_at' in row and row['created_at'] else datetime.datetime.now().isoformat(),
                 "location": region,
                 "state": state,
                 "city": city,
@@ -128,12 +110,8 @@ def get_tweets():
                 }
             })
 
-        cursor.close()
-        conn.close()
         return jsonify(tweets)
 
-    except mysql.connector.Error as err:
-        return jsonify({"error": f"Database error: {str(err)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
@@ -141,23 +119,7 @@ def get_tweets():
 def get_states_summary():
     """Get aggregated sentiment data by state"""
     try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-            
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT 
-                region,
-                COUNT(*) as total_messages,
-                SUM(CASE WHEN sentiment = 'positive' THEN 1 ELSE 0 END) as positive_count,
-                SUM(CASE WHEN sentiment = 'negative' THEN 1 ELSE 0 END) as negative_count,
-                SUM(CASE WHEN sentiment = 'neutral' THEN 1 ELSE 0 END) as neutral_count
-            FROM tweet_sentiment 
-            GROUP BY region
-            ORDER BY total_messages DESC
-        """)
-        rows = cursor.fetchall()
+        rows = db.get_state_summary()
 
         # Group by state
         state_data = defaultdict(lambda: {
@@ -169,8 +131,7 @@ def get_states_summary():
         })
 
         # Get all tweets for transport type analysis
-        cursor.execute("SELECT text, region FROM tweet_sentiment")
-        all_tweets = cursor.fetchall()
+        all_tweets = db.get_recent_tweets(limit=10000)
         
         for tweet in all_tweets:
             transport_type = determine_transport_type(tweet['text'])
@@ -206,101 +167,8 @@ def get_states_summary():
                     }
                 })
 
-        cursor.close()
-        conn.close()
         return jsonify(states_data)
 
-    except mysql.connector.Error as err:
-        return jsonify({"error": f"Database error: {str(err)}"}), 500
-    except Exception as e:
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
-
-@app.route('/api/states/<state_name>')
-def get_state_details(state_name):
-    """Get detailed data for a specific state"""
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-            
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT 
-                region,
-                text,
-                sentiment,
-                created_at
-            FROM tweet_sentiment 
-            WHERE region LIKE %s
-            ORDER BY created_at DESC
-            LIMIT 50
-        """, (f'%{state_name}%',))
-        rows = cursor.fetchall()
-
-        # Process the data
-        result = []
-        for row in rows:
-            transport_type = determine_transport_type(row['text'])
-            result.append({
-                'region': row['region'],
-                'text': row['text'],
-                'sentiment': row['sentiment'],
-                'transport_type': transport_type,
-                'created_at': row['created_at'].isoformat() if row['created_at'] else None
-            })
-
-        cursor.close()
-        conn.close()
-        return jsonify(result)
-
-    except mysql.connector.Error as err:
-        return jsonify({"error": f"Database error: {str(err)}"}), 500
-    except Exception as e:
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
-
-@app.route('/api/analytics/trends')
-def get_sentiment_trends():
-    """Get sentiment trends over time"""
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-            
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT 
-                DATE(created_at) as date,
-                HOUR(created_at) as hour,
-                region,
-                sentiment,
-                COUNT(*) as message_count
-            FROM tweet_sentiment 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            GROUP BY DATE(created_at), HOUR(created_at), region, sentiment
-            ORDER BY date DESC, hour DESC
-        """)
-        rows = cursor.fetchall()
-
-        # Process trends data
-        trends = []
-        for row in rows:
-            state = extract_state_from_region(row['region'])
-            sentiment_score = determine_sentiment_score(row['sentiment'])
-            
-            trends.append({
-                'date': row['date'].isoformat() if row['date'] else None,
-                'hour': row['hour'],
-                'state': state,
-                'sentiment': sentiment_score,
-                'message_count': row['message_count']
-            })
-
-        cursor.close()
-        conn.close()
-        return jsonify(trends)
-
-    except mysql.connector.Error as err:
-        return jsonify({"error": f"Database error: {str(err)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
@@ -308,10 +176,4 @@ def get_sentiment_trends():
 if __name__ == '__main__':
     print("🚀 Starting Indian Transport Sentiment API...")
     print("📊 Serving data for all Indian states")
-    print("🔗 API endpoints:")
-    print("   - /api/status - Health check")
-    print("   - /api/tweets - Recent tweets")
-    print("   - /api/states - State-wise summary")
-    print("   - /api/states/<state> - State details")
-    print("   - /api/analytics/trends - Sentiment trends")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=PORT, debug=True)

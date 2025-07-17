@@ -1,32 +1,95 @@
 services:
+  # Backend API Service
   - type: web
-    name: transport-sentiment-backend
+    name: transport-sentiment-api
     env: python
     buildCommand: |
-      apt-get update && apt-get install -y gcc libxml2-dev libxslt1-dev
-      pip install -r requirements.txt
+      pip install --upgrade pip
+      pip install -r backend/requirements.txt
+      python -c "import textblob; textblob.download_corpora()"
     startCommand: python backend/api.py
     envVars:
-      - key: MYSQL_HOST
-        value: localhost  # or your Render MySQL hostname
-      - key: MYSQL_USER
-        value: root
-      - key: MYSQL_PASSWORD
-        value: gadheull12
-      - key: MYSQL_DATABASE
-        value: transport_sentiment_app
-      - key: NEWS_API_KEY
-        value: dummy_news_api_key
+      - key: PYTHON_VERSION
+        value: 3.9.16
+      - key: PORT
+        value: 5000
       - key: REDDIT_CLIENT_ID
-        value: dummy_reddit_id
-      - key: REDDIT_SECRET
-        value: dummy_reddit_secret
-      - key: TWITTER_BEARER_TOKEN
-        value: dummy_bearer_token
+        value: u2cLai036-BFLeZTrlVrDQ
+      - key: REDDIT_CLIENT_SECRET
+        value: g1BpKHMPRt_M6jYBOxm_-HzGwbKpDw
+      - key: NEWS_API_KEY
+        value: 5189820e12d74b9fa076fc032be614d5
+      - key: MYSQL_HOST
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: host
+      - key: MYSQL_DATABASE
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: database
+      - key: MYSQL_USER
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: user
+      - key: MYSQL_PASSWORD
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: password
+      - key: DATABASE_URL
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: connectionString
 
+  # Frontend Service
   - type: web
     name: transport-sentiment-frontend
     env: node
-    buildCommand: npm install
-    startCommand: npm run build && npm run preview
-    rootDir: frontend
+    buildCommand: |
+      npm install
+      npm run build
+    startCommand: npm run preview
+    envVars:
+      - key: NODE_VERSION
+        value: 18.17.0
+      - key: VITE_API_URL
+        value: https://transport-sentiment-api.onrender.com
+
+  # Background Job for Data Collection
+  - type: cron
+    name: transport-data-collector
+    env: python
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r backend/requirements.txt
+    startCommand: python backend/multi_source_scraper.py && python backend/analyse_sentiment.py
+    schedule: "0 */2 * * *"  # Run every 2 hours
+    envVars:
+      - key: REDDIT_CLIENT_ID
+        value: u2cLai036-BFLeZTrlVrDQ
+      - key: REDDIT_CLIENT_SECRET
+        value: g1BpKHMPRt_M6jYBOxm_-HzGwbKpDw
+      - key: NEWS_API_KEY
+        value: 5189820e12d74b9fa076fc032be614d5
+      - key: MYSQL_HOST
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: host
+      - key: MYSQL_DATABASE
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: database
+      - key: MYSQL_USER
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: user
+      - key: MYSQL_PASSWORD
+        fromDatabase:
+          name: transport-sentiment-mysql
+          property: password
+
+# MySQL Database
+databases:
+  - name: transport-sentiment-mysql
+    databaseName: transport_sentiment
+    user: transport_user
+    plan: starter  # Free tier

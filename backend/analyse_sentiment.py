@@ -7,10 +7,13 @@ import re
 
 # ---------- DATABASE CONFIG ----------
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",          # ← change if your user is different
-    "password": "gadheullu12",          # ← set your MySQL password
-    "database": "transport_sentiment_app"  # ← the DB you selected earlier
+    "host": os.getenv('MYSQL_HOST', 'localhost'),
+    "user": os.getenv('MYSQL_USER', 'root'),
+    "password": os.getenv('MYSQL_PASSWORD', 'gadheullu12'),
+    "database": os.getenv('MYSQL_DATABASE', 'transport_sentiment_app'),
+    "port": int(os.getenv('MYSQL_PORT', 3306)),
+    "charset": "utf8mb4",
+    "collation": "utf8mb4_unicode_ci"
 }
 
 # ---------- INDIAN STATES AND CITIES MAPPING ----------
