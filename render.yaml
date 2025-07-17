@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: transport-sentiment-backend
+    env: python
+    buildCommand: |
+      apt-get update && apt-get install -y gcc libxml2-dev libxslt1-dev
+      pip install -r requirements.txt
+    startCommand: python backend/api.py
+    envVars:
+      - key: MYSQL_HOST
+        value: localhost  # or your Render MySQL hostname
+      - key: MYSQL_USER
+        value: root
+      - key: MYSQL_PASSWORD
+        value: gadheull12
+      - key: MYSQL_DATABASE
+        value: transport_sentiment_app
+      - key: NEWS_API_KEY
+        value: dummy_news_api_key
+      - key: REDDIT_CLIENT_ID
+        value: dummy_reddit_id
+      - key: REDDIT_SECRET
+        value: dummy_reddit_secret
+      - key: TWITTER_BEARER_TOKEN
+        value: dummy_bearer_token
+
+  - type: web
+    name: transport-sentiment-frontend
+    env: node
+    buildCommand: npm install
+    startCommand: npm run build && npm run preview
+    rootDir: frontend
